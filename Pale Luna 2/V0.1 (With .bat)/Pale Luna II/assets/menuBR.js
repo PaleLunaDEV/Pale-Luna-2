@@ -17,6 +17,10 @@ const ET_FILE = path.join(BASE_DIR, 'assets', 'ET.txt');
 const MUSIC_PATH = path.join(BASE_DIR, 'audios', 'You_Cant_Escape.mp3');
 const VLC_COMMAND = `"${path.join(BASE_DIR, 'audios', 'VLC', 'vlc.exe')}" --play-and-exit --qt-start-minimized "${MUSIC_PATH}"`;
 
+// Constantes de Caminho para Troca de Idioma
+const EN_MENU_FILE = path.join(__dirname, 'MenuEN.js');
+const CURRENT_MENU_FILE = path.join(__dirname, 'MenuBR.js'); // Adicionado
+
 let currentMenu = 'main';
 let tocando = false;
 
@@ -114,7 +118,7 @@ const mainMenuItems = [
 ];
 const settingsMenuItems = [
     'Trilha Sonora', 'Criação de Conta', 'Restaurar Finais',
-    'Incluir Easter Eggs', 'Voltar ao menu principal'
+    'Incluir Easter Eggs', 'Idioma', 'Voltar ao menu principal' // Adicionado 'Idioma'
 ];
 const musicOptionItems = [
     'Ativar Trilha Sonora', 'Desativar Trilha Sonora', 'Voltar'
@@ -134,6 +138,12 @@ const restoreMenuItems = [
 const supportMenuItems = [
     'Sim, Abrir Link', 'Não, Voltar'
 ];
+// Novo Menu de Idioma
+const languageMenuItems = [
+    'PT (BR)',
+    'EN (US)',
+    'Voltar'
+];
 
 const menuItemsMap = {
     'main': { items: mainMenuItems, label: 'MENU PRINCIPAL' },
@@ -144,6 +154,7 @@ const menuItemsMap = {
     'easterEggs': { items: easterEggsMenuItems, label: 'EASTER EGGS' },
     'restore': { items: restoreMenuItems, label: 'RESTAURAR FINAIS' },
     'support': { items: supportMenuItems, label: 'APOIE O JOGO' },
+    'language': { items: languageMenuItems, label: 'IDIOMA' }, // Adicionado
 };
 
 
@@ -312,7 +323,6 @@ function displayInitialResizeWarning() {
 /**
  * PAUSA SIMPLIFICADA E ROBUSTA: Usa o prompt-sync e recria TUDO
  * para garantir que o console esteja limpo antes de qualquer I/O externo.
- * Isto é necessário devido ao uso do prompt-sync e exec/console.log misturado.
  */
 function pausarParaContinuarAndRecreate(message) {
     // 1. Destrói a tela Blessed
@@ -478,7 +488,41 @@ async function handleSelection(index) {
                     break;
                 case 'Restaurar Finais': changeMenu('restore', restoreMenuItems, 'RESTAURAR FINAIS'); break;
                 case 'Incluir Easter Eggs': changeMenu('easterEggs', easterEggsMenuItems, 'EASTER EGGS'); break;
+                case 'Idioma': changeMenu('language', languageMenuItems, 'IDIOMA'); break; // NOVO: Mudar para menu de idioma
                 case 'Voltar ao menu principal': changeMenu('main', mainMenuItems, 'MENU PRINCIPAL'); break;
+            }
+        } else if (currentMenu === 'language') { // NOVO: LÓGICA DE TROCA DE IDIOMA
+            if (selectedItem === 'EN (US)') {
+                
+                // 1. Limpa a música e destrói o TUI
+                if (tocando) exec('taskkill /IM vlc.exe /F');
+                screen.destroy(); 
+                
+                // 2. Comando usando 'call' para forçar a execução na mesma janela do terminal
+                const command = `call node "${EN_MENU_FILE}"`;
+                
+                try {
+                    // *** PASSO CRÍTICO: execSync com stdio: 'inherit' ***
+                    // Garante que o comando seja enviado e o novo processo assuma o I/O
+                    execSync(command, { stdio: 'inherit' });
+                    
+                    // 3. Mata o processo Node atual imediatamente.
+                    process.exit(0); 
+                    
+                } catch (error) {
+                    // Fallback em caso de erro crítico
+                    console.error(`[ERRO CRÍTICO]: Falha na troca de idioma via execSync: ${error.message}`);
+                    createBlessedScreen();
+                    changeMenu('language', languageMenuItems, 'IDIOMA');
+                    pausarParaContinuarAndRecreate(`[FALHA NA TROCA DE IDIOMA]\nErro: ${error.message}`);
+                }
+
+            } else if (selectedItem === 'PT (BR)') {
+                // Já está em PT (BR) - apenas notifica
+                pausarParaContinuarAndRecreate("[SISTEMA]\nJá está em Português (BR).");
+                changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+            } else if (selectedItem === 'Voltar') {
+                changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
             }
         } else if (currentMenu === 'music') {
             let message = '';

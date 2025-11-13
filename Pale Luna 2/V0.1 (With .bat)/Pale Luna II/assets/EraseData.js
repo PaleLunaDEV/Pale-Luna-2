@@ -88,7 +88,7 @@ process.stdin.on('data', async (chunk) => {
                 centerText("\x1b[96m===========================================================================");
                 centerText("\x1b[96mOPENING WEBSITE...");
                 centerText("\x1b[96m===========================================================================");
-                exec('start Massivestudios.itch.io/pale-luna');
+                exec('start https://the-last-deploy.itch.io/pale-luna-2');
                 await pausarParaContinuar();
                 process.exit();
             } else { // No
