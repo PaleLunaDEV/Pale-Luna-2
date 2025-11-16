@@ -1,42 +1,65 @@
-// ===============================================
-// 1. IMPORTS E VARIÁVEIS GLOBAIS
-// ===============================================
+// menuBR_fixed.js
+// Refatorado e corrigido para criação de conta e fluxo TUI (Blessed)
+// Requisitos: node, prompt-sync, blessed
+
 const readline = require('readline');
-const { exec, execSync, spawn } = require('child_process');
+const { exec, execSync } = require('child_process');
 const prompt = require('prompt-sync')();
 const fs = require('fs');
 const path = require('path');
 const blessed = require('blessed');
 
-// Constantes de Caminho (Mais Limpas)
+// =====================
+// Constantes de caminho
+// =====================
 const BASE_DIR = path.resolve(__dirname, '..');
+const ACCOUNT_DIR = path.join(BASE_DIR, 'Account');
 const ACH_FOLDER = path.join(BASE_DIR, 'Achievements');
-const ACCOUNT_FILE = path.join(BASE_DIR, 'Account', 'AccountInfo.txt');
-const ACH_SAVE_FILE = path.join(BASE_DIR, 'Account', 'Achievementsavefile.bin');
-const ET_FILE = path.join(BASE_DIR, 'assets', 'ET.txt');
-const MUSIC_PATH = path.join(BASE_DIR, 'audios', 'You_Cant_Escape.mp3');
-const VLC_COMMAND = `"${path.join(BASE_DIR, 'audios', 'VLC', 'vlc.exe')}" --play-and-exit --qt-start-minimized "${MUSIC_PATH}"`;
+const ACCOUNT_FILE = path.join(ACCOUNT_DIR, 'AccountInfo.txt');
+const ACH_SAVE_FILE = path.join(ACCOUNT_DIR, 'Achievementsavefile.bin');
+const ASSETS_DIR = path.join(BASE_DIR, 'assets');
+const ET_FILE = path.join(ASSETS_DIR, 'ET.txt');
+const MUSIC_PATH = path.join(ASSETS_DIR, 'audios', 'You_Cant_Escape.mp3');
+const VLC_EXE = path.join(ASSETS_DIR, 'audios', 'VLC', 'vlc.exe');
 
-// Constantes de Caminho para Troca de Idioma
+// Arquivos de linguagem (se existir)
+// (o original referenciava MenuEN.js / MenuBR.js — mantive as variáveis para compatibilidade)
 const EN_MENU_FILE = path.join(__dirname, 'MenuEN.js');
-const CURRENT_MENU_FILE = path.join(__dirname, 'MenuBR.js'); // Adicionado
+const CURRENT_MENU_FILE = path.join(__dirname, 'MenuBR.js');
+
+// =====================
+// Garantir estrutura de pastas
+// =====================
+function ensureDir(dirPath) {
+    try {
+        if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+    } catch (e) {
+        console.error(`Falha ao garantir diretório ${dirPath}: ${e.message}`);
+    }
+}
+
+ensureDir(ACCOUNT_DIR);
+ensureDir(ACH_FOLDER);
+ensureDir(path.join(ASSETS_DIR, 'audios'));
+
+// =====================
+// Variáveis de estado
+// =====================
+let screen = null;
+let logoBox = null;
+let menuList = null;
+let contentBox = null;
+let footer = null;
+let pauseBox = null;
 
 let currentMenu = 'main';
 let tocando = false;
+let paused = false;
 
-// Tamanho Mínimo Recomendado para o layout TUI
 const MIN_WIDTH = 120;
 const MIN_HEIGHT = 30;
 
-// Variáveis que armazenarão as referências dos componentes BLESSED
-let screen;
-let logoBox;
-let menuList;
-let contentBox;
-let footer;
-let pauseBox; // Novo componente para a lógica de pausa
-
-// Logo Gigante
+// Logo (simplificado para evitar problemas de render)
 const PALE_LUNA_LOGO = '\x1b[0m\n' +
     "██████╗  █████╗ ██╗     ███████╗     ████████║ ████████║\n" +
     "██╔══██╗██╔══██╗██║     ██╔════╝       ████╔═╝   ████╔═╝\n" +
@@ -51,74 +74,16 @@ const PALE_LUNA_LOGO = '\x1b[0m\n' +
     "███████╗╚██████╔╝██║ ╚████║██║  ██║  ████████║ ████████║\n" +
     "╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝  ╚═══════╝ ╚═══════╝";
 
-
-// ===============================================
-// 2. FUNÇÕES DE VERIFICAÇÃO DE DADOS
-// ===============================================
-
-function conquistaannoying(nomeArquivo) {
-    const caminhoCompleto = path.join(ACH_FOLDER, nomeArquivo);
-    return fs.existsSync(caminhoCompleto);
-}
-
-function lerNumeroDoArquivo(nomeDoArquivo) {
-    const caminhoCompleto = path.join(BASE_DIR, nomeDoArquivo);
-    try {
-        const conteudoDoArquivo = fs.readFileSync(caminhoCompleto, 'utf8');
-        const numeroLido = parseInt(conteudoDoArquivo.trim(), 10);
-        return isNaN(numeroLido) ? 0 : numeroLido;
-    } catch (erro) {
-        return 0;
-    }
-}
-
-// ===============================================
-// 3. LÓGICA DE TRAPAÇA / INICIALIZAÇÃO DE FLUXO
-// ===============================================
-const ARQUIVO_SECRETO = 'SECRET_ENDING.bin'
-const ARQUIVO_TRAPACA = 'HAHAHAHAHAHAHA.txt'
-let jogadortem = conquistaannoying(ARQUIVO_SECRETO);
-const numero = lerNumeroDoArquivo(ARQUIVO_TRAPACA);
-
-if (numero == 3) {
-    exec('start cmd.exe /c goodbye.bat')
-    console.log("-> HAHAHAHHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHHAHAHAHHAH")
-    process.exit(0)
-} else if (numero == 2) {
-    console.clear()
-    console.log("===========================================================================")
-    console.log("-> Eu acho que você não entendeu, né?")
-    console.log("-> Você NUNCA teve controle neste mundo...")
-    console.log("-> E agora eu irei te mostrar como as coisas são por aqui!")
-    console.log("===========================================================================")
-    fs.writeFileSync(path.join(BASE_DIR, ARQUIVO_TRAPACA), "3", 'utf8');
-    process.exit(0)
-} else if (numero == 1) {
-    console.clear()
-    console.log("===========================================================================")
-    console.log("-> Você acha mesmo que depois do que você fez eu irei te deixar em paz???")
-    console.log("===========================================================================")
-    fs.writeFileSync(path.join(BASE_DIR, ARQUIVO_TRAPACA), "2", 'utf8');
-    process.exit(0)
-} else if (jogadortem == true) {
-    console.clear()
-    console.log("===========================================================================")
-    console.log("-> Serio? Você acha mesmo que é só fechar e abrir o jogo?")
-    console.log("===========================================================================")
-    fs.writeFileSync(path.join(BASE_DIR, ARQUIVO_TRAPACA), "1", 'utf8');
-    process.exit(0)
-}
-
-// ===============================================
-// 4. DEFINIÇÃO DOS ITENS DE MENU
-// ===============================================
+// =====================
+// Menus e mapas
+// =====================
 const mainMenuItems = [
     'INICIAR JOGO', 'REINICIAR PROGRESSO', 'CONQUISTAS', 'CONFIGURAÇÕES',
     'CRÉDITOS', 'SUPORTE', 'SAIR'
 ];
 const settingsMenuItems = [
-    'Trilha Sonora', 'Criação de Conta', 'Restaurar Finais',
-    'Incluir Easter Eggs', 'Idioma', 'Voltar ao menu principal' // Adicionado 'Idioma'
+    'TRILHA SONORA', 'CRIAÇÃO DE CONTA', 'RESTAURAÇÃO DE FINAIS',
+    'EASTER EGGS', 'IDIOMA', 'VOLTAR AO MENU PRINCIPAL'
 ];
 const musicOptionItems = [
     'Ativar Trilha Sonora', 'Desativar Trilha Sonora', 'Voltar'
@@ -138,11 +103,8 @@ const restoreMenuItems = [
 const supportMenuItems = [
     'Sim, Abrir Link', 'Não, Voltar'
 ];
-// Novo Menu de Idioma
 const languageMenuItems = [
-    'PT (BR)',
-    'EN (US)',
-    'Voltar'
+    'PT (BR)', 'EN (US)', 'Voltar'
 ];
 
 const menuItemsMap = {
@@ -154,104 +116,158 @@ const menuItemsMap = {
     'easterEggs': { items: easterEggsMenuItems, label: 'EASTER EGGS' },
     'restore': { items: restoreMenuItems, label: 'RESTAURAR FINAIS' },
     'support': { items: supportMenuItems, label: 'APOIE O JOGO' },
-    'language': { items: languageMenuItems, label: 'IDIOMA' }, // Adicionado
+    'language': { items: languageMenuItems, label: 'IDIOMA' },
 };
 
+// =====================
+// Utilitários de arquivo
+// =====================
+function conquistaannoying(nomeArquivo) {
+    const caminhoCompleto = path.join(ACH_FOLDER, nomeArquivo);
+    try { return fs.existsSync(caminhoCompleto); } catch (e) { return false; }
+}
 
-// ===============================================
-// 5. FUNÇÕES DE TUI
-// ===============================================
-
-/**
- * Cria/recria todos os componentes Blessed.
- */
-function createBlessedScreen() {
-    if (screen) {
-        screen.destroy();
+function lerNumeroDoArquivo(nomeDoArquivoRelativo) {
+    const caminhoCompleto = path.join(BASE_DIR, nomeDoArquivoRelativo);
+    try {
+        if (!fs.existsSync(caminhoCompleto)) return 0;
+        const conteudoDoArquivo = fs.readFileSync(caminhoCompleto, 'utf8');
+        const numeroLido = parseInt(conteudoDoArquivo.trim(), 10);
+        return isNaN(numeroLido) ? 0 : numeroLido;
+    } catch (erro) {
+        return 0;
     }
+}
+
+// =====================
+// Checagens iniciais (truques antigos preservados)
+// =====================
+const ARQUIVO_SECRETO = 'SECRET_ENDING.bin';
+const ARQUIVO_TRAPACA = 'HAHAHAHAHAHAHA.txt';
+let jogadortem = conquistaannoying(ARQUIVO_SECRETO);
+const numeroTrap = lerNumeroDoArquivo(ARQUIVO_TRAPACA);
+
+if (numeroTrap === 3) {
+    try { exec('start cmd.exe /c goodbye.bat'); } catch (e) {}
+    console.log("-> HAHAHAH... encerrando.");
+    process.exit(0);
+} else if (numeroTrap === 2) {
+    console.clear();
+    console.log("-> Você NUNCA teve controle neste mundo...");
+    try { fs.writeFileSync(path.join(BASE_DIR, ARQUIVO_TRAPACA), "3", 'utf8'); } catch(e){}
+    process.exit(0);
+} else if (numeroTrap === 1) {
+    console.clear();
+    try { fs.writeFileSync(path.join(BASE_DIR, ARQUIVO_TRAPACA), "2", 'utf8'); } catch(e){}
+    process.exit(0);
+} else if (jogadortem === true) {
+    console.clear();
+    try { fs.writeFileSync(path.join(BASE_DIR, ARQUIVO_TRAPACA), "1", 'utf8'); } catch(e){}
+    process.exit(0);
+}
+
+// =====================
+// FUNÇÕES BLESSED / UI
+// =====================
+
+function safeDestroyScreen() {
+    try {
+        if (screen) {
+            screen.destroy();
+            screen = null;
+            logoBox = menuList = contentBox = footer = pauseBox = null;
+        }
+    } catch (e) {
+        // ignore
+    }
+}
+
+function createBlessedScreen() {
+    // Se já existe, não recria — mas permitir recriação se screen == null
+    if (screen) return;
 
     screen = blessed.screen({
         smartCSR: true,
         title: 'Pale Luna II: The Fading Light'
     });
 
-    screen.key(['escape', 'q', 'C-c'], function(ch, key) {
-        if (tocando) exec('taskkill /IM vlc.exe /F');
-        return process.exit(0);
+    screen.key(['escape', 'q', 'C-c'], function() {
+        if (tocando) try { execSync('taskkill /IM vlc.exe /F'); } catch (e) {}
+        safeDestroyScreen();
+        process.exit(0);
     });
 
-    // LOGO/HEADER
     logoBox = blessed.box({
-        top: 'top', left: 'center', width: '90%', height: 14,
-        content: PALE_LUNA_LOGO,
-        tags: true,
-        style: { fg: 'white', bold: true }
-    });
-    screen.append(logoBox);
+                top: 'top', left: 'center', width: '90%', height: 14,
+                content: PALE_LUNA_LOGO,
+                tags: true,
+                style: { fg: 'white', bold: true }
+            });
+            screen.append(logoBox);
 
-    // MENU LATERAL ESQUERDO (Lista)
     menuList = blessed.list({
-        top: 15,
-        left: 1,
-        width: '30%',
-        height: '100%-16',
-        keys: true,
-        mouse: true,
-        style: {
-            selected: { fg: 'black', bg: 'white' },
-            item: { fg: 'white', bg: 'black' },
-            border: { fg: 'cyan' }
-        },
-        border: { type: 'line' },
-        label: ' MENU ',
-        items: []
-    });
-    screen.append(menuList);
+                top: 15,
+                left: 1,
+                width: '30%',
+                height: '100%-16',
+                keys: true,
+                mouse: true,
+                style: {
+                    selected: { fg: 'black', bg: 'white' },
+                    item: { fg: 'white', bg: 'black' },
+                    border: { fg: 'cyan' }
+                },
+                border: { type: 'line' },
+                label: ' MENU ',
+                items: []
+            });
+            screen.append(menuList);
 
-    // CONTEÚDO PRINCIPAL
     contentBox = blessed.box({
-        top: 15, left: '32%', width: '67%', height: '60%',
-        content: 'Selecione uma opção ao lado.\nUse as setas para navegar e Enter para selecionar.',
-        tags: true,
-        border: { type: 'line' },
-        style: { fg: 'white', border: { fg: 'green' } },
-        scrollable: true, alwaysScroll: true,
-        scrollbar: { ch: ' ', track: { bg: 'gray' }, style: { inverse: true } }
-    });
-    screen.append(contentBox);
+                top: 15, left: '32%', width: '67%', height: '90%-16',
+                content: 'Selecione uma opção ao lado.\nUse as setas para navegar e Enter para selecionar.',
+                tags: true,
+                border: { type: 'line' },
+                style: { fg: 'white', border: { fg: 'green' } },
+                scrollable: true, alwaysScroll: true,
+                scrollbar: { ch: ' ', track: { bg: 'gray' }, style: { inverse: true } }
+            });
+            screen.append(contentBox);
+    
+            // BOX DE PAUSA (Sobrepõe o contentBox)
+            pauseBox = blessed.box({
+                top: 'center', left: 'center', width: '70%', height: '30%',
+                hidden: true,
+                border: { type: 'line' },
+                style: { fg: 'white', bg: 'red', border: { fg: 'red' } },
+                content: ''
+            });
+            screen.append(pauseBox);
+    
 
-    // BOX DE PAUSA (Inicialmente invisível)
-    pauseBox = blessed.box({
-        top: 'center', left: 'center', width: '80%', height: '30%',
-        hidden: true,
-        border: { type: 'line' },
-        style: { fg: 'white', bg: 'red', border: { fg: 'red' } },
-        content: ''
-    });
-    screen.append(pauseBox);
-
-    // FOOTER
     footer = blessed.text({
         bottom: 0, left: 0, width: '100%', height: 1,
-        content: 'Use as setas para cima/baixo e Enter. Pressione Q ou Ctrl+C para sair.',
+        content: 'Use as setas ↑/↓ e Enter. Pressione Q ou Ctrl+C para sair.',
         style: { fg: 'yellow', bg: 'black' }
     });
     screen.append(footer);
 
-    // Handler de seleção - garante bloqueio local enquanto processa
     menuList.on('select', async (item, index) => {
-        // Desabilita interação adicional durante o processamento
+        if (paused) return;
+        // desabilita interações extras
         menuList.interactive = false;
-        menuList.detach();
-
         try {
             await handleSelection(index);
+        } catch (e) {
+            blessedPause(`[ERRO CRÍTICO NO HANDLER]\n${e.message}`, () => {
+                changeMenu(currentMenu, menuItemsMap[currentMenu].items, menuItemsMap[currentMenu].label);
+            });
         } finally {
-            // Reanexa e reabilita a lista para receber novas seleções
-            screen.append(menuList);
-            menuList.interactive = true;
-            menuList.focus();
-            screen.render();
+            if (!paused) {
+                menuList.interactive = true;
+                try { menuList.focus(); } catch(e){}
+                screen.render();
+            }
         }
     });
 
@@ -259,117 +275,64 @@ function createBlessedScreen() {
     screen.render();
 }
 
-/**
- * Atualiza o conteúdo da caixa principal.
- */
 function updateContent(title, content) {
-    if (Array.isArray(content)) {
-        content = content.join('\n');
-    }
+    if (!contentBox) return;
+    if (Array.isArray(content)) content = content.join('\n');
     contentBox.setLabel(` ${title} `);
     contentBox.setContent(content);
-    screen.render();
+    if (screen) screen.render();
 }
 
-/**
- * Altera o menu atual e atualiza a lista.
- */
 function changeMenu(menuName, menuItems, label) {
     currentMenu = menuName;
+    if (!menuList) return;
     menuList.setItems(menuItems);
     menuList.setLabel(` ${label} `);
     menuList.select(0);
-    menuList.focus();
+    try { menuList.focus(); } catch (e) {}
     updateContent(label, 'Selecione uma opção.');
-    screen.render();
+    if (screen) screen.render();
 }
 
-// ===============================================
-// 6. FUNÇÕES DE CONTROLE DE FLUXO (PAUSA E TAMANHO)
-// ===============================================
+// =====================
+// PAUSA interna (Blessed)
+// =====================
+function blessedPause(message, callback) {
+    paused = true;
+    if (menuList) menuList.interactive = false;
 
-/**
- * Funções de aviso inicial (mantidas)
- */
-function displayInitialResizeWarning() {
-    console.clear();
-    console.log("=========================================================");
-    console.log("             🚨 AVISO DE TAMANHO DO TERMINAL 🚨           ");
-    console.log("=========================================================");
-    console.log(`Para uma experiência ideal com o menu lateral,`);
-    console.log(`redimensione o terminal para pelo menos ${MIN_WIDTH}x${MIN_HEIGHT}.`);
-    console.log(`Pressione **ENTER** para verificar o tamanho atual e iniciar.`);
-    console.log("=========================================================");
+    pauseBox.setContent(`[SISTEMA]\n${message}\n\n[PRESSIONE QUALQUER TECLA PARA CONTINUAR]`);
+    pauseBox.show();
+    pauseBox.focus();
+    if (screen) screen.render();
 
-    prompt('');
-
-    while (process.stdout.columns < MIN_WIDTH || process.stdout.rows < MIN_HEIGHT) {
-        console.clear();
-        console.log("=========================================================");
-        console.log("             ⚠️ TAMANHO INSUFICIENTE ⚠️                   ");
-        console.log("=========================================================");
-        console.log(`O terminal está muito pequeno.`);
-        console.log(`Recomendado: ${MIN_WIDTH}x${MIN_HEIGHT}.`);
-        console.log(`Atual: ${process.stdout.columns}x${process.stdout.rows}.`);
-        console.log("=========================================================");
-        console.log("[Ajuste a janela e pressione **ENTER** para verificar novamente]");
-        prompt('');
-    }
-
-    console.clear();
-    console.log("Tamanho verificado. Iniciando TUI...");
+    screen.once('keypress', () => {
+        paused = false;
+        pauseBox.hide();
+        if (menuList) menuList.interactive = true;
+        try { menuList.focus(); } catch(e){}
+        if (screen) screen.render();
+        if (typeof callback === 'function') callback();
+    });
 }
 
-/**
- * PAUSA SIMPLIFICADA E ROBUSTA: Usa o prompt-sync e recria TUDO
- * para garantir que o console esteja limpo antes de qualquer I/O externo.
- */
-function pausarParaContinuarAndRecreate(message) {
-    // 1. Destrói a tela Blessed
-    if (screen) {
-        screen.destroy();
-    }
-
-    // 2. Exibe a mensagem de pausa
-    console.clear();
-    console.log("===========================================================================");
-    if (message) console.log(message);
-    console.log("[PRESSIONE [ENTER] PARA CONTINUAR]");
-    console.log("===========================================================================");
-    prompt('');
-
-    // 3. Verifica o tamanho da janela novamente
-    while (process.stdout.columns < MIN_WIDTH || process.stdout.rows < MIN_HEIGHT) {
-        console.clear();
-        console.log("=========================================================");
-        console.log("             ⚠️ TAMANHO INSUFICIENTE ⚠️                   ");
-        console.log("=========================================================");
-        console.log(`O terminal está muito pequeno.`);
-        console.log(`Recomendado: ${MIN_WIDTH}x${MIN_HEIGHT}.`);
-        console.log(`Atual: ${process.stdout.columns}x${process.stdout.rows}.`);
-        console.log("=========================================================");
-        console.log("[Ajuste a janela e pressione **ENTER** para verificar novamente]");
-        prompt('');
-    }
-
-    // 4. Recria a tela e restaura o estado
-    createBlessedScreen();
-    const menuState = menuItemsMap[currentMenu];
-
-    if (menuState) {
-        changeMenu(currentMenu, menuState.items, menuState.label);
-    } else {
-        changeMenu('main', mainMenuItems, 'MENU PRINCIPAL');
-    }
-}
-
-// ===============================================
-// 7. FUNÇÕES DE AÇÃO
-// ===============================================
+// =====================
+// Ações (música, conquistas, criar conta...)
+// =====================
 
 function tocamusic() {
-    const command = `start /min "" ${VLC_COMMAND}`;
-    exec(`cmd.exe /c "${command}"`, (error, stdout, stderr) => {});
+    if (!fs.existsSync(MUSIC_PATH) || !fs.existsSync(VLC_EXE)) {
+        // não falha silenciosamente — avisa
+        blessedPause("[TRILHA SONORA]\nArquivo de áudio ou vlc.exe não encontrado.");
+        return;
+    }
+    const cmd = `"${VLC_EXE}" --play-and-exit --qt-start-minimized "${MUSIC_PATH}"`;
+    try {
+        // start minimized on windows
+        exec(`start /min "" ${cmd}`, (err) => {});
+    } catch (e) {
+        console.error("Falha ao iniciar música:", e.message);
+    }
 }
 
 async function conquistasBlessed() {
@@ -378,79 +341,105 @@ async function conquistasBlessed() {
         finais = fs.readdirSync(ACH_FOLDER).filter(f => f.endsWith('.bin'));
     } catch (e) {
         updateContent('CONQUISTAS', `[ERRO DE ARQUIVO]: Não foi possível ler a pasta de conquistas. ${e.message}`);
-        pausarParaContinuarAndRecreate("[CONQUISTAS]");
+        if (menuList) menuList.focus();
         return;
     }
 
     const count = finais.length;
-    let content = "VERIFICANDO PASTAS\n\n";
-
+    let content = "\nVERIFICANDO PASTAS...\n\n";
     if (count > 0) {
-        content += "[ARQUIVOS ENCONTRADOS]\n" + finais.join('\n') +
-            "\n\n-> Se você quiser manter esses finais, NÃO OS RESTAURE";
+        content += `[${count} ARQUIVOS ENCONTRADOS]\n${finais.join('\n')}\n\n-> Se você quiser manter esses finais, NÃO OS RESTAURE.`;
     } else {
-        content += "-> Nenhum arquivo de final encontrado!";
+        content += "[NENHUM ARQUIVO DE FINAL ENCONTRADO]";
     }
-
     updateContent('CONQUISTAS', content);
-    pausarParaContinuarAndRecreate("[CONQUISTAS]");
-}
-
-async function createAccountBlessed() {
-    if (screen) {
-        screen.destroy();
-    }
-    console.clear();
-    console.log("===========================================================================");
-    console.log("                     [CRIAÇÃO DE CONTA]                      ");
-    console.log("===========================================================================");
-
-    const Usuario = prompt("[NOME DE USUÁRIO]: ");
-    const Senha = prompt("[SENHA]: ");
-    console.log("===========================================================================");
-
-    const conteudo = `[NOME]: ${Usuario}\r\n[SENHA]: ${Senha}\r\n[IDIOMA]: Português \r\n`;
-
-    try {
-        fs.writeFileSync(ACCOUNT_FILE, conteudo, 'utf8');
-        let finais = [];
-        try {
-            finais = fs.readdirSync(ACH_FOLDER).filter(f => f.endsWith('.bin'));
-        } catch (e) { /* Ignora */ }
-
-        if (finais.length > 0) {
-            fs.writeFileSync(ACH_SAVE_FILE, finais.join('\r\n'), 'utf8');
-            console.log("[SISTEMA]: Conta criada com sucesso! Seus finais estão salvos.");
-        } else {
-            console.log("[SISTEMA]: Conta criada com sucesso! Você não tem finais ainda.");
-        }
-    } catch (error) {
-        console.error(`[ERRO CRÍTICO]: Falha ao criar arquivo de conta ou salvamento. ${error.message}`);
-    }
-
-
-    pausarParaContinuarAndRecreate();
-    updateContent('CRIAÇÃO DE CONTA', "[SISTEMA]: Conta criada e salvamento verificado.");
+    if (menuList) menuList.focus();
 }
 
 /**
- * Lida com a seleção de item no menu.
+ * Criação de conta:
+ * - Destroi a TUI
+ * - Faz I/O no console nativo com prompt-sync
+ * - Recria TUI e mostra resultado com blessedPause
  */
+async function createAccountBlessedAndPause() {
+    // destruir TUI para evitar conflitos de stdin
+    safeDestroyScreen();
+    console.clear();
+    console.log("===========================================================================");
+    console.log("                 [CRIAÇÃO DE CONTA - ENTRADA NO CONSOLE]                   ");
+    console.log("===========================================================================");
+
+    try {
+        const usuario = prompt("[NOME DE USUÁRIO]: ");
+        const senha = prompt.hide ? prompt.hide("[SENHA]: ") : prompt("[SENHA]: "); // prompt-sync tem hide em algumas versões
+        console.log("===========================================================================");
+
+        const conteudo = `[NOME]: ${usuario}\r\n[SENHA]: ${senha}\r\n[IDIOMA]: Português\r\n`;
+
+        ensureDir(ACCOUNT_DIR);
+
+        let resultMessage = '';
+        try {
+            fs.writeFileSync(ACCOUNT_FILE, conteudo, 'utf8');
+
+            let finais = [];
+            try {
+                finais = fs.readdirSync(ACH_FOLDER).filter(f => f.endsWith('.bin'));
+            } catch (e) { /* ignora, não crítico */ }
+
+            if (finais.length > 0) {
+                fs.writeFileSync(ACH_SAVE_FILE, finais.join('\r\n'), 'utf8');
+                resultMessage = "[SISTEMA]: Conta criada com sucesso! Seus finais estão salvos.";
+            } else {
+                resultMessage = "[SISTEMA]: Conta criada com sucesso! Você não tem finais ainda.";
+            }
+        } catch (errWrite) {
+            resultMessage = `[ERRO CRÍTICO]: Falha ao criar arquivo de conta ou salvamento. ${errWrite.message}`;
+        }
+
+        console.log(`\n[RESULTADO]: ${resultMessage}`);
+    } catch (errConsole) {
+        console.error("Erro durante a entrada no console:", errConsole.message);
+    }
+
+    prompt("Pressione ENTER para retornar ao menu...");
+
+    // recriar a tela TUI
+    createBlessedScreen();
+
+    // exibir pausa e retornar para Configurações
+    blessedPause("[SISTEMA]\nConta processada com sucesso.", () => {
+        changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+    });
+}
+
+// =====================
+// Handler de seleção
+// =====================
 async function handleSelection(index) {
-    const selectedItem = menuList.getItem(index).getText().trim();
+    if (!menuList) return;
+    const itemObj = menuList.getItem(index);
+    if (!itemObj) return;
+    const selectedItem = (itemObj.getText ? itemObj.getText() : String(itemObj)).trim();
 
     try {
         if (currentMenu === 'main') {
             switch (selectedItem) {
                 case 'INICIAR JOGO':
-                    if (tocando) exec('taskkill /IM vlc.exe /F');
-                    screen.destroy();
-                    require('./mainBR.js');
+                    if (tocando) try { execSync('taskkill /IM vlc.exe /F'); } catch(e){}
+                    safeDestroyScreen();
+                    try {
+                        execSync(`node "${path.join(__dirname, 'mainBR.js')}"`, { stdio: 'inherit' });
+                    } catch (e) {
+                        console.error("Erro ao iniciar jogo:", e.message);
+                    }
+                    process.exit(0);
                     break;
                 case 'REINICIAR PROGRESSO':
-                    exec('start cmd.exe /c node eraseData.js', async (error) => {
+                    exec('start cmd.exe /c node eraseData.js', (error) => {
                         const msg = error ? `[ERRO: ARQUIVO FALHOU ${error.message}]` : '[PROGRESSO REINICIADO]';
-                        pausarParaContinuarAndRecreate(`[REINICIAR PROGRESSO]\n${msg}`);
+                        blessedPause(`[REINICIAR PROGRESSO]\n${msg}`);
                     });
                     break;
                 case 'CONQUISTAS':
@@ -471,56 +460,60 @@ async function handleSelection(index) {
                         "Você também pode deixar uma avaliação na página do jogo!\n\nLink para doação: https://the-last-deploy.itch.io/pale-luna-2\n\n[ABRIR?]");
                     break;
                 case 'SAIR':
-                    if (tocando) exec('taskkill /IM vlc.exe /F');
+                    if (tocando) try { execSync('taskkill /IM vlc.exe /F'); } catch(e){}
+                    safeDestroyScreen();
                     process.exit(0);
+                    break;
+                default:
+                    // ação padrão
+                    break;
             }
         } else if (currentMenu === 'settings') {
             switch (selectedItem) {
-                case 'Trilha Sonora': changeMenu('music', musicOptionItems, 'TRILHA SONORA'); break;
-                case 'Criação de Conta':
+                case 'TRILHA SONORA':
+                    changeMenu('music', musicOptionItems, 'TRILHA SONORA');
+                    break;
+                case 'CRIAÇÃO DE CONTA':
                     if (fs.existsSync(ACCOUNT_FILE)) {
                         changeMenu('overwrite', overwriteOptionItems, 'SOBRESCREVER CONTA');
                         updateContent('SOBRESCREVER CONTA', "[EXISTE UM ARQUIVO DE CONTA, DESEJA SOBRESCREVE-LO?]");
                     } else {
-                        await createAccountBlessed();
-                        changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                        await createAccountBlessedAndPause();
                     }
                     break;
-                case 'Restaurar Finais': changeMenu('restore', restoreMenuItems, 'RESTAURAR FINAIS'); break;
-                case 'Incluir Easter Eggs': changeMenu('easterEggs', easterEggsMenuItems, 'EASTER EGGS'); break;
-                case 'Idioma': changeMenu('language', languageMenuItems, 'IDIOMA'); break; // NOVO: Mudar para menu de idioma
-                case 'Voltar ao menu principal': changeMenu('main', mainMenuItems, 'MENU PRINCIPAL'); break;
+                case 'RESTAURAÇÃO DE FINAIS':
+                    changeMenu('restore', restoreMenuItems, 'RESTAURAR FINAIS');
+                    break;
+                case 'EASTER EGGS':
+                    changeMenu('easterEggs', easterEggsMenuItems, 'EASTER EGGS');
+                    break;
+                case 'IDIOMA':
+                    changeMenu('language', languageMenuItems, 'IDIOMA');
+                    break;
+                case 'VOLTAR AO MENU PRINCIPAL':
+                    changeMenu('main', mainMenuItems, 'MENU PRINCIPAL');
+                    break;
             }
-        } else if (currentMenu === 'language') { // NOVO: LÓGICA DE TROCA DE IDIOMA
+        } else if (currentMenu === 'language') {
             if (selectedItem === 'EN (US)') {
-                
-                // 1. Limpa a música e destrói o TUI
-                if (tocando) exec('taskkill /IM vlc.exe /F');
-                screen.destroy(); 
-                
-                // 2. Comando usando 'call' para forçar a execução na mesma janela do terminal
-                const command = `call node "${EN_MENU_FILE}"`;
-                
+                // tenta trocar para menu em inglês salvando estado
+                if (tocando) try { execSync('taskkill /IM vlc.exe /F'); } catch(e){}
+                safeDestroyScreen();
                 try {
-                    // *** PASSO CRÍTICO: execSync com stdio: 'inherit' ***
-                    // Garante que o comando seja enviado e o novo processo assuma o I/O
-                    execSync(command, { stdio: 'inherit' });
-                    
-                    // 3. Mata o processo Node atual imediatamente.
-                    process.exit(0); 
-                    
+                    execSync(`node "${EN_MENU_FILE}"`, { stdio: 'inherit' });
+                    process.exit(0);
                 } catch (error) {
-                    // Fallback em caso de erro crítico
-                    console.error(`[ERRO CRÍTICO]: Falha na troca de idioma via execSync: ${error.message}`);
+                    console.error(`[ERRO CRÍTICO]: Falha ao iniciar Menu EN: ${error.message}`);
                     createBlessedScreen();
                     changeMenu('language', languageMenuItems, 'IDIOMA');
-                    pausarParaContinuarAndRecreate(`[FALHA NA TROCA DE IDIOMA]\nErro: ${error.message}`);
+                    blessedPause(`[FALHA NA TROCA DE IDIOMA]\nErro: ${error.message}`, () => {
+                        changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                    });
                 }
-
             } else if (selectedItem === 'PT (BR)') {
-                // Já está em PT (BR) - apenas notifica
-                pausarParaContinuarAndRecreate("[SISTEMA]\nJá está em Português (BR).");
-                changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                blessedPause("[SISTEMA]\nJá está em Português (BR).", () => {
+                    changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                });
             } else if (selectedItem === 'Voltar') {
                 changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
             }
@@ -531,11 +524,12 @@ async function handleSelection(index) {
                     if (tocando) { message = "[A MÚSICA JÁ ESTÁ TOCANDO]"; }
                     else { tocamusic(); tocando = true; message = "[TRILHA SONORA INICIADA]"; }
                 } else if (selectedItem.includes('Desativar')) {
-                    if (tocando) { exec('taskkill /IM vlc.exe /F'); tocando = false; message = "[MÚSICA PARADA]"; }
+                    if (tocando) { try { execSync('taskkill /IM vlc.exe /F'); } catch(e){} tocando = false; message = "[MÚSICA PARADA]"; }
                     else { message = "[A MÚSICA JÁ ESTÁ PARADA]"; }
                 }
-                pausarParaContinuarAndRecreate(`[TRILHA SONORA]\n${message}`);
-                changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                blessedPause(`[TRILHA SONORA]\n${message}`, () => {
+                    changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                });
             } else if (selectedItem.includes('Voltar')) {
                 changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
             }
@@ -545,44 +539,43 @@ async function handleSelection(index) {
                     changeMenu('overwrite', overwriteOptionItems, 'SOBRESCREVER CONTA');
                     updateContent('SOBRESCREVER CONTA', "[EXISTE UM ARQUIVO DE CONTA, DESEJA SOBRESCREVE-LO?]");
                 } else {
-                    await createAccountBlessed();
-                    changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                    await createAccountBlessedAndPause();
                 }
             } else if (selectedItem === 'Pular') {
-                pausarParaContinuarAndRecreate("[CRIAÇÃO DE CONTA PULADA]");
-                changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                blessedPause("[CRIAÇÃO DE CONTA PULADA]", () => {
+                    changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                });
             } else if (selectedItem === 'Voltar') {
                 changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
             }
         } else if (currentMenu === 'overwrite') {
             if (selectedItem.includes('Sim')) {
-                await createAccountBlessed();
+                await createAccountBlessedAndPause();
             } else {
-                pausarParaContinuarAndRecreate("[CRIAÇÃO DE CONTA CANCELADA]");
+                blessedPause("[CRIAÇÃO DE CONTA CANCELADA]", () => {
+                    changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                });
             }
-            changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
         } else if (currentMenu === 'easterEggs') {
             let message = '';
             if (selectedItem.includes('Ativar') || selectedItem.includes('Desativar')) {
                 if (selectedItem.includes('Ativar')) {
                     if (fs.existsSync(ET_FILE)) { message = "[EASTER EGGS JÁ ESTÃO ATIVADOS]"; }
                     else { fs.writeFileSync(ET_FILE, 'Easter Eggs Activated', 'utf8'); message = "[EASTER EGGS ATIVADOS!]"; }
-                } else if (selectedItem.includes('Desativar')) {
+                } else {
                     if (!fs.existsSync(ET_FILE)) { message = "[EASTER EGGS JÁ ESTÃO DESATIVADOS]"; }
                     else { fs.unlinkSync(ET_FILE); message = "[EASTER EGGS DESATIVADOS!]"; }
                 }
-                pausarParaContinuarAndRecreate(`[EASTER EGGS]\n${message}`);
-                changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                blessedPause(`[EASTER EGGS]\n${message}`, () => {
+                    changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                });
             } else if (selectedItem.includes('Voltar')) {
                 changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
             }
         } else if (currentMenu === 'restore') {
             let message = '';
             let finaisPasta = [];
-            try {
-                finaisPasta = fs.readdirSync(ACH_FOLDER).filter(f => f.endsWith('.bin'));
-            } catch (e) { /* Ignora */ }
-
+            try { finaisPasta = fs.readdirSync(ACH_FOLDER).filter(f => f.endsWith('.bin')); } catch (e) { /* ignora */ }
 
             if (selectedItem.includes('Sim')) {
                 if (!fs.existsSync(ACH_SAVE_FILE)) {
@@ -590,53 +583,79 @@ async function handleSelection(index) {
                 } else {
                     try {
                         const dados = fs.readFileSync(ACH_SAVE_FILE, 'utf8');
-                        let restored = [];
                         const finaisToRestore = dados.split('\n').map(f => f.trim()).filter(f => f.length > 0);
-
-                        if (finaisToRestore.length > 0) {
-                            finaisToRestore.forEach(final => {
-                                if (!fs.existsSync(path.join(ACH_FOLDER, final))) {
-                                    fs.writeFileSync(path.join(ACH_FOLDER, final), 'a', 'utf8');
-                                    restored.push(final);
-                                }
-                            });
-
-                            if (restored.length > 0) { message = `[FINAIS RESTAURADOS COM SUCESSO]:\n${restored.join('\n')}`; }
-                            else { message = "[FINAIS JÁ ESTAVAM PRESENTES NA PASTA]"; }
-                        } else { message = "[NENHUM FINAL ENCONTRADO NO ARQUIVO DE SALVAMENTO]"; }
-                    } catch (err) { message = `[ERRO]: Falha ao ler ou restaurar arquivos: ${err.message}`; }
+                        const restored = [];
+                        finaisToRestore.forEach(final => {
+                            const destino = path.join(ACH_FOLDER, final);
+                            if (!fs.existsSync(destino)) {
+                                fs.writeFileSync(destino, 'a', 'utf8');
+                                restored.push(final);
+                            }
+                        });
+                        if (restored.length > 0) { message = `[FINAIS RESTAURADOS COM SUCESSO]:\n${restored.join('\n')}`; }
+                        else { message = "[FINAIS JÁ ESTAVAM PRESENTES NA PASTA]"; }
+                    } catch (err) {
+                        message = `[ERRO]: Falha ao ler ou restaurar arquivos: ${err.message}`;
+                    }
                 }
-                pausarParaContinuarAndRecreate(`[RESTAURAR FINAIS]\n${message}`);
-                changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                blessedPause(`[RESTAURAR FINAIS]\n${message}`, () => {
+                    changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                });
             } else if (selectedItem.includes('Não')) {
-                pausarParaContinuarAndRecreate("[RESTAURAÇÃO CANCELADA]");
-                changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                blessedPause("[RESTAURAÇÃO CANCELADA]", () => {
+                    changeMenu('settings', settingsMenuItems, 'CONFIGURAÇÕES');
+                });
             } else if (selectedItem.includes('Verificar')) {
                 if (finaisPasta.length > 0) {
-                    message = `[ARQUIVOS ENCONTRADOS NO PROGRESSO ATUAL]:\n${finaisPasta.join('\n')}\n\n-> Se você quiser manter esses finais, NÃO OS RESTAURE`;
-                } else { message = "[NENHUM FINAL ENCONTRADO!]"; }
-                pausarParaContinuarAndRecreate(`[VERIFICAÇÃO DE FINAIS]\n${message}`);
-                changeMenu('restore', restoreMenuItems, 'RESTAURAR FINAIS');
+                    updateContent('VERIFICAÇÃO DE FINAIS', `[ARQUIVOS ENCONTRADOS NO PROGRESSO ATUAL]:\n${finaisPasta.join('\n')}\n\n-> Se você quiser manter esses finais, NÃO OS RESTAURE`);
+                } else {
+                    updateContent('VERIFICAÇÃO DE FINAIS', "[NENHUM FINAL ENCONTRADO!]");
+                }
+                if (menuList) menuList.focus();
             }
         } else if (currentMenu === 'support') {
             if (selectedItem.includes('Sim')) {
-                pausarParaContinuarAndRecreate("[ABRINDO LINK NO NAVEGADOR PADRÃO...]");
-                exec('start https://the-last-deploy.itch.io/pale-luna-2');
+                blessedPause("[ABRINDO LINK NO NAVEGADOR PADRÃO...]", () => {
+                    try { exec('start https://the-last-deploy.itch.io/pale-luna-2'); } catch (e) {}
+                    changeMenu('main', mainMenuItems, 'MENU PRINCIPAL');
+                });
             } else {
-                pausarParaContinuarAndRecreate("[OPÇÃO RECUSADA]");
+                blessedPause("[OPÇÃO RECUSADA]", () => {
+                    changeMenu('main', mainMenuItems, 'MENU PRINCIPAL');
+                });
             }
-            changeMenu('main', mainMenuItems, 'MENU PRINCIPAL');
         }
     } catch (error) {
-        console.error(`[ERRO CRÍTICO NO MENU]: ${error.message}`);
-        pausarParaContinuarAndRecreate(`[ERRO CRÍTICO]\nOcorreu um erro no processamento do menu: ${error.message}`);
-        changeMenu('main', mainMenuItems, 'MENU PRINCIPAL');
+        blessedPause(`[ERRO CRÍTICO NA AÇÃO]\nOcorreu um erro: ${error.message}`, () => {
+            changeMenu('main', mainMenuItems, 'MENU PRINCIPAL');
+        });
     }
 }
 
-// ===============================================
-// 8. INICIALIZAÇÃO DO PROGRAMA
-// ===============================================
+// =====================
+// INICIALIZAÇÃO
+// =====================
+function displayInitialResizeWarning() {
+    console.clear();
+    console.log("=========================================================");
+    console.log("             🚨 AVISO DE TAMANHO DO TERMINAL 🚨           ");
+    console.log("=========================================================");
+    console.log(`Redimensione o terminal para pelo menos ${MIN_WIDTH}x${MIN_HEIGHT}.`);
+    console.log(`Pressione ENTER para verificar o tamanho atual e iniciar.`);
+    prompt('');
+    while (process.stdout.columns < MIN_WIDTH || process.stdout.rows < MIN_HEIGHT) {
+        console.clear();
+        console.log("=========================================================");
+        console.log("             ⚠️ TAMANHO INSUFICIENTE ⚠️                 ");
+        console.log("=========================================================");
+        console.log(`Recomendado: ${MIN_WIDTH}x${MIN_HEIGHT}. Atual: ${process.stdout.columns}x${process.stdout.rows}.`);
+        console.log("[Ajuste a janela e pressione ENTER para verificar novamente]");
+        prompt('');
+    }
+    console.clear();
+    console.log("Tamanho verificado. Iniciando TUI...");
+}
+
 displayInitialResizeWarning();
 createBlessedScreen();
 changeMenu('main', mainMenuItems, 'MENU PRINCIPAL');

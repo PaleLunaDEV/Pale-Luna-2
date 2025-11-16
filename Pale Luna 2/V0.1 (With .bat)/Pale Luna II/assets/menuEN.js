@@ -1,43 +1,65 @@
-// ===============================================
-// 1. IMPORTS AND GLOBAL VARIABLES
-// ===============================================
+// menuEN.js
+// Refactored and corrected for account creation and TUI (Blessed) flow
+// Requirements: node, prompt-sync, blessed
+
 const readline = require('readline');
-// *** execSync é crucial aqui ***
-const { exec, execSync, spawn } = require('child_process'); 
+const { exec, execSync } = require('child_process');
 const prompt = require('prompt-sync')();
 const fs = require('fs');
 const path = require('path');
 const blessed = require('blessed');
 
-// Path Constants (Cleaner)
+// =====================
+// Path Constants
+// =====================
 const BASE_DIR = path.resolve(__dirname, '..');
+const ACCOUNT_DIR = path.join(BASE_DIR, 'Account');
 const ACH_FOLDER = path.join(BASE_DIR, 'Achievements');
-const ACCOUNT_FILE = path.join(BASE_DIR, 'Account', 'AccountInfo.txt');
-const ACH_SAVE_FILE = path.join(BASE_DIR, 'Account', 'Achievementsavefile.bin');
-const ET_FILE = path.join(BASE_DIR, 'assets', 'ET.txt');
-const MUSIC_PATH = path.join(BASE_DIR, 'audios', 'You_Cant_Escape.mp3');
-const VLC_COMMAND = `"${path.join(BASE_DIR, 'audios', 'VLC', 'vlc.exe')}" --play-and-exit --qt-start-minimized "${MUSIC_PATH}"`;
+const ACCOUNT_FILE = path.join(ACCOUNT_DIR, 'AccountInfo.txt');
+const ACH_SAVE_FILE = path.join(ACCOUNT_DIR, 'Achievementsavefile.bin');
+const ASSETS_DIR = path.join(BASE_DIR, 'assets');
+const ET_FILE = path.join(ASSETS_DIR, 'ET.txt');
+const MUSIC_PATH = path.join(ASSETS_DIR, 'audios', 'You_Cant_Escape.mp3');
+const VLC_EXE = path.join(ASSETS_DIR, 'audios', 'VLC', 'vlc.exe');
 
-// Language Path
-const BR_MENU_FILE = path.join(__dirname, 'MenuBR.js');
-const CURRENT_MENU_FILE = path.join(__dirname, 'MenuEN.js'); // Not strictly needed, but kept for consistency
+// Language files
+// (The original referenced MenuEN.js / MenuBR.js)
+const BR_MENU_FILE = path.join(__dirname, 'MenuBR.js'); // Pointing to Portuguese file
+const CURRENT_MENU_FILE = path.join(__dirname, 'MenuEN.js'); // This file
+
+// =====================
+// Ensure folder structure
+// =====================
+function ensureDir(dirPath) {
+    try {
+        if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+    } catch (e) {
+        console.error(`Failed to ensure directory ${dirPath}: ${e.message}`);
+    }
+}
+
+ensureDir(ACCOUNT_DIR);
+ensureDir(ACH_FOLDER);
+ensureDir(path.join(ASSETS_DIR, 'audios'));
+
+// =====================
+// State Variables
+// =====================
+let screen = null;
+let logoBox = null;
+let menuList = null;
+let contentBox = null;
+let footer = null;
+let pauseBox = null;
 
 let currentMenu = 'main';
-let tocando = false; // Playing (music)
+let tocando = false;
+let paused = false;
 
-// Recommended Minimum Size for TUI layout
 const MIN_WIDTH = 120;
 const MIN_HEIGHT = 30;
 
-// Variables that will store the BLESSED component references
-let screen;
-let logoBox;
-let menuList;
-let contentBox;
-let footer;
-let pauseBox; // New component for pause logic
-
-// Giant Logo (Kept original for visual consistency)
+// Logo (simplified to avoid rendering issues)
 const PALE_LUNA_LOGO = '\x1b[0m\n' +
     "██████╗  █████╗ ██╗     ███████╗     ████████║ ████████║\n" +
     "██╔══██╗██╔══██╗██║     ██╔════╝       ████╔═╝   ████╔═╝\n" +
@@ -52,74 +74,16 @@ const PALE_LUNA_LOGO = '\x1b[0m\n' +
     "███████╗╚██████╔╝██║ ╚████║██║  ██║  ████████║ ████████║\n" +
     "╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝  ╚═══════╝ ╚═══════╝";
 
-
-// ===============================================
-// 2. DATA VERIFICATION FUNCTIONS
-// ===============================================
-
-function achievementAnnoying(fileName) {
-    const fullPath = path.join(ACH_FOLDER, fileName);
-    return fs.existsSync(fullPath);
-}
-
-function readNumberFromFile(fileName) {
-    const fullPath = path.join(BASE_DIR, fileName);
-    try {
-        const fileContent = fs.readFileSync(fullPath, 'utf8');
-        const readNumber = parseInt(fileContent.trim(), 10);
-        return isNaN(readNumber) ? 0 : readNumber;
-    } catch (error) {
-        return 0;
-    }
-}
-
-// ===============================================
-// 3. CHEAT / FLOW INITIALIZATION LOGIC
-// ===============================================
-const SECRET_FILE = 'SECRET_ENDING.bin'
-const CHEAT_FILE = 'HAHAHAHAHAHAHA.txt'
-let playerHasSecret = achievementAnnoying(SECRET_FILE);
-const number = readNumberFromFile(CHEAT_FILE);
-
-if (number == 3) {
-    exec('start cmd.exe /c goodbye.bat')
-    console.log("-> HAHAHAHHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHHAHAHAHHAH")
-    process.exit(0)
-} else if (number == 2) {
-    console.clear()
-    console.log("===========================================================================")
-    console.log("-> I think you didn't understand, right?")
-    console.log("-> You NEVER had control in this world...")
-    console.log("-> And now I will show you how things are around here!")
-    console.log("===========================================================================")
-    fs.writeFileSync(path.join(BASE_DIR, CHEAT_FILE), "3", 'utf8');
-    process.exit(0)
-} else if (number == 1) {
-    console.clear()
-    console.log("===========================================================================")
-    console.log("-> Do you really think that after what you did I will leave you alone???")
-    console.log("===========================================================================")
-    fs.writeFileSync(path.join(BASE_DIR, CHEAT_FILE), "2", 'utf8');
-    process.exit(0)
-} else if (playerHasSecret == true) {
-    console.clear()
-    console.log("===========================================================================")
-    console.log("-> Seriously? Do you really think you can just close and open the game?")
-    console.log("===========================================================================")
-    fs.writeFileSync(path.join(BASE_DIR, CHEAT_FILE), "1", 'utf8');
-    process.exit(0)
-}
-
-// ===============================================
-// 4. MENU ITEM DEFINITION
-// ===============================================
+// =====================
+// Menus and maps (TRANSLATED)
+// =====================
 const mainMenuItems = [
-    'START GAME', 'RESET PROGRESS', 'ACHIEVEMENTS', 'SETTINGS',
+    'START GAME', 'RESTART PROGRESS', 'ACHIEVEMENTS', 'SETTINGS',
     'CREDITS', 'SUPPORT', 'EXIT'
 ];
 const settingsMenuItems = [
     'Soundtrack', 'Account Creation', 'Restore Endings',
-    'Include Easter Eggs', 'Language', 'Back to main menu'
+    'Easter Eggs', 'Language', 'Back to main menu'
 ];
 const musicOptionItems = [
     'Activate Soundtrack', 'Deactivate Soundtrack', 'Back'
@@ -128,22 +92,19 @@ const accountOptionItems = [
     'Create Account', 'Skip', 'Back'
 ];
 const overwriteOptionItems = [
-    'Yes, Overwrite', 'No, Back'
+    'Yes, Overwrite', 'No, Go Back'
 ];
 const easterEggsMenuItems = [
     'Activate Easter Eggs', 'Deactivate Easter Eggs', 'Back to settings menu'
 ];
 const restoreMenuItems = [
-    'Yes, Restore', 'No, Back', 'Check Folder'
+    'Yes, Restore', 'No, Go Back', 'Check Folder'
 ];
 const supportMenuItems = [
-    'Yes, Open Link', 'No, Back'
+    'Yes, Open Link', 'No, Go Back'
 ];
-// NEW LANGUAGE MENU
 const languageMenuItems = [
-    'EN (US)',
-    'PT (BR)',
-    'Back'
+    'PT (BR)', 'EN (US)', 'Back'
 ];
 
 const menuItemsMap = {
@@ -155,104 +116,158 @@ const menuItemsMap = {
     'easterEggs': { items: easterEggsMenuItems, label: 'EASTER EGGS' },
     'restore': { items: restoreMenuItems, label: 'RESTORE ENDINGS' },
     'support': { items: supportMenuItems, label: 'SUPPORT THE GAME' },
-    'language': { items: languageMenuItems, label: 'LANGUAGE' }, // NEW
+    'language': { items: languageMenuItems, label: 'LANGUAGE' },
 };
 
+// =====================
+// File Utilities (TRANSLATED COMMENTS)
+// =====================
+function conquistaannoying(fileName) {
+    const fullPath = path.join(ACH_FOLDER, fileName);
+    try { return fs.existsSync(fullPath); } catch (e) { return false; }
+}
 
-// ===============================================
-// 5. TUI FUNCTIONS
-// ===============================================
-
-/**
- * Creates/recreates all Blessed components.
- */
-function createBlessedScreen() {
-    if (screen) {
-        screen.destroy();
+function lerNumeroDoArquivo(relativeFileName) {
+    const fullPath = path.join(BASE_DIR, relativeFileName);
+    try {
+        if (!fs.existsSync(fullPath)) return 0;
+        const fileContent = fs.readFileSync(fullPath, 'utf8');
+        const readNumber = parseInt(fileContent.trim(), 10);
+        return isNaN(readNumber) ? 0 : readNumber;
+    } catch (error) {
+        return 0;
     }
+}
 
-    screen = blessed.screen({
-        smartCSR: true,
-        title: 'Pale Luna II: The Fading Light'
-    });
+// =====================
+// Initial Checks (preserved old tricks) (TRANSLATED CONSOLE LOGS)
+// =====================
+const ARQUIVO_SECRETO = 'SECRET_ENDING.bin';
+const ARQUIVO_TRAPACA = 'HAHAHAHAHAHAHA.txt';
+let jogadortem = conquistaannoying(ARQUIVO_SECRETO);
+const numeroTrap = lerNumeroDoArquivo(ARQUIVO_TRAPACA);
 
-    screen.key(['escape', 'q', 'C-c'], function(ch, key) {
-        if (tocando) exec('taskkill /IM vlc.exe /F');
-        return process.exit(0);
-    });
+if (numeroTrap === 3) {
+    try { exec('start cmd.exe /c goodbye.bat'); } catch (e) {}
+    console.log("-> HAHAHAH... exiting.");
+    process.exit(0);
+} else if (numeroTrap === 2) {
+    console.clear();
+    console.log("-> You NEVER had control in this world...");
+    try { fs.writeFileSync(path.join(BASE_DIR, ARQUIVO_TRAPACA), "3", 'utf8'); } catch(e){}
+    process.exit(0);
+} else if (numeroTrap === 1) {
+    console.clear();
+    try { fs.writeFileSync(path.join(BASE_DIR, ARQUIVO_TRAPACA), "2", 'utf8'); } catch(e){}
+    process.exit(0);
+} else if (jogadortem === true) {
+    console.clear();
+    try { fs.writeFileSync(path.join(BASE_DIR, ARQUIVO_TRAPACA), "1", 'utf8'); } catch(e){}
+    process.exit(0);
+}
 
-    // LOGO/HEADER
-    logoBox = blessed.box({
-        top: 'top', left: 'center', width: '90%', height: 14,
-        content: PALE_LUNA_LOGO,
-        tags: true,
-        style: { fg: 'white', bold: true }
-    });
-    screen.append(logoBox);
+// =====================
+// BLESSED / UI FUNCTIONS (TRANSLATED TEXT)
+// =====================
 
-    // LEFT SIDE MENU (List)
-    menuList = blessed.list({
-        top: 15,
-        left: 1,
-        width: '30%',
-        height: '100%-16',
-        keys: true,
-        mouse: true,
-        style: {
-            selected: { fg: 'black', bg: 'white' },
-            item: { fg: 'white', bg: 'black' },
-            border: { fg: 'cyan' }
-        },
-        border: { type: 'line' },
-        label: ' MENU ',
-        items: []
-    });
-    screen.append(menuList);
+function safeDestroyScreen() {
+    try {
+        if (screen) {
+            screen.destroy();
+            screen = null;
+            logoBox = menuList = contentBox = footer = pauseBox = null;
+        }
+    } catch (e) {
+        // ignore
+    }
+}
 
-    // MAIN CONTENT
-    contentBox = blessed.box({
-        top: 15, left: '32%', width: '67%', height: '60%',
-        content: 'Select an option on the side.\nUse the arrows to navigate and Enter to select.',
-        tags: true,
-        border: { type: 'line' },
-        style: { fg: 'white', border: { fg: 'green' } },
-        scrollable: true, alwaysScroll: true,
-        scrollbar: { ch: ' ', track: { bg: 'gray' }, style: { inverse: true } }
-    });
-    screen.append(contentBox);
+function createBlessedScreen() {
+    // If it already exists, don't recreate it — but allow recreation if screen == null
+    if (screen) return;
+    
+        screen = blessed.screen({
+            smartCSR: true,
+            title: 'Pale Luna II: The Fading Light'
+        });
+    
+        screen.key(['escape', 'q', 'C-c'], function() {
+            if (tocando) try { execSync('taskkill /IM vlc.exe /F'); } catch (e) {}
+            safeDestroyScreen();
+            process.exit(0);
+        });
+    
+        logoBox = blessed.box({
+                    top: 'top', left: 'center', width: '90%', height: 14,
+                    content: PALE_LUNA_LOGO,
+                    tags: true,
+                    style: { fg: 'white', bold: true }
+                });
+                screen.append(logoBox);
+    
+        menuList = blessed.list({
+                    top: 15,
+                    left: 1,
+                    width: '30%',
+                    height: '100%-16',
+                    keys: true,
+                    mouse: true,
+                    style: {
+                        selected: { fg: 'black', bg: 'white' },
+                        item: { fg: 'white', bg: 'black' },
+                        border: { fg: 'cyan' }
+                    },
+                    border: { type: 'line' },
+                    label: ' MENU ',
+                    items: []
+                });
+                screen.append(menuList);
+    
+        contentBox = blessed.box({
+                    top: 15, left: '32%', width: '67%', height: '90%-16',
+                    content: 'Selecione uma opção ao lado.\nUse as setas para navegar e Enter para selecionar.',
+                    tags: true,
+                    border: { type: 'line' },
+                    style: { fg: 'white', border: { fg: 'green' } },
+                    scrollable: true, alwaysScroll: true,
+                    scrollbar: { ch: ' ', track: { bg: 'gray' }, style: { inverse: true } }
+                });
+                screen.append(contentBox);
+        
+                // BOX DE PAUSA (Sobrepõe o contentBox)
+                pauseBox = blessed.box({
+                    top: 'center', left: 'center', width: '70%', height: '30%',
+                    hidden: true,
+                    border: { type: 'line' },
+                    style: { fg: 'white', bg: 'red', border: { fg: 'red' } },
+                    content: ''
+                });
+                screen.append(pauseBox);
+        
+    
+        footer = blessed.text({
+            bottom: 0, left: 0, width: '100%', height: 1,
+            content: 'Use as setas ↑/↓ e Enter. Pressione Q ou Ctrl+C para sair.',
+            style: { fg: 'yellow', bg: 'black' }
+        });
+        screen.append(footer);
 
-    // PAUSE BOX (Initially invisible)
-    pauseBox = blessed.box({
-        top: 'center', left: 'center', width: '80%', height: '30%',
-        hidden: true,
-        border: { type: 'line' },
-        style: { fg: 'white', bg: 'red', border: { fg: 'red' } },
-        content: ''
-    });
-    screen.append(pauseBox);
-
-    // FOOTER
-    footer = blessed.text({
-        bottom: 0, left: 0, width: '100%', height: 1,
-        content: 'Use up/down arrows and Enter. Press Q or Ctrl+C to exit.',
-        style: { fg: 'yellow', bg: 'black' }
-    });
-    screen.append(footer);
-
-    // Selection Handler - ensures local lock while processing
     menuList.on('select', async (item, index) => {
-        // Disable additional interaction during processing
+        if (paused) return;
+        // disable extra interactions
         menuList.interactive = false;
-        menuList.detach();
-
         try {
             await handleSelection(index);
+        } catch (e) {
+            blessedPause(`[CRITICAL HANDLER ERROR]\n${e.message}`, () => {
+                changeMenu(currentMenu, menuItemsMap[currentMenu].items, menuItemsMap[currentMenu].label);
+            });
         } finally {
-            // Re-append and re-enable the list to receive new selections
-            screen.append(menuList);
-            menuList.interactive = true;
-            menuList.focus();
-            screen.render();
+            if (!paused) {
+                menuList.interactive = true;
+                try { menuList.focus(); } catch(e){}
+                screen.render();
+            }
         }
     });
 
@@ -260,203 +275,178 @@ function createBlessedScreen() {
     screen.render();
 }
 
-/**
- * Updates the main content box.
- */
 function updateContent(title, content) {
-    if (Array.isArray(content)) {
-        content = content.join('\n');
-    }
+    if (!contentBox) return;
+    if (Array.isArray(content)) content = content.join('\n');
     contentBox.setLabel(` ${title} `);
     contentBox.setContent(content);
-    screen.render();
+    if (screen) screen.render();
 }
 
-/**
- * Changes the current menu and updates the list.
- */
 function changeMenu(menuName, menuItems, label) {
     currentMenu = menuName;
+    if (!menuList) return;
     menuList.setItems(menuItems);
     menuList.setLabel(` ${label} `);
     menuList.select(0);
-    menuList.focus();
+    try { menuList.focus(); } catch (e) {}
     updateContent(label, 'Select an option.');
-    screen.render();
+    if (screen) screen.render();
 }
 
-// ===============================================
-// 6. FLOW CONTROL FUNCTIONS (PAUSE AND SIZE)
-// ===============================================
+// =====================
+// Internal Pause (Blessed) (TRANSLATED TEXT)
+// =====================
+function blessedPause(message, callback) {
+    paused = true;
+    if (menuList) menuList.interactive = false;
 
-/**
- * Initial warning functions (maintained)
- */
-function displayInitialResizeWarning() {
-    console.clear();
-    console.log("=========================================================");
-    console.log("             🚨 TERMINAL SIZE WARNING 🚨           ");
-    console.log("=========================================================");
-    console.log(`For an optimal experience with the side menu,`);
-    console.log(`resize the terminal to at least ${MIN_WIDTH}x${MIN_HEIGHT}.`);
-    console.log(`Press **ENTER** to check current size and start.`);
-    console.log("=========================================================");
+    pauseBox.setContent(`[SYSTEM]\n${message}\n\n[PRESS ANY KEY TO CONTINUE]`);
+    pauseBox.show();
+    pauseBox.focus();
+    if (screen) screen.render();
 
-    prompt('');
-
-    while (process.stdout.columns < MIN_WIDTH || process.stdout.rows < MIN_HEIGHT) {
-        console.clear();
-        console.log("=========================================================");
-        console.log("             ⚠️ INSUFFICIENT SIZE ⚠️                   ");
-        console.log("=========================================================");
-        console.log(`The terminal is too small.`);
-        console.log(`Recommended: ${MIN_WIDTH}x${MIN_HEIGHT}.`);
-        console.log(`Current: ${process.stdout.columns}x${process.stdout.rows}.`);
-        console.log("=========================================================");
-        console.log("[Adjust the window and press **ENTER** to check again]");
-        prompt('');
-    }
-
-    console.clear();
-    console.log("Size verified. Starting TUI...");
+    screen.once('keypress', () => {
+        paused = false;
+        pauseBox.hide();
+        if (menuList) menuList.interactive = true;
+        try { menuList.focus(); } catch(e){}
+        if (screen) screen.render();
+        if (typeof callback === 'function') callback();
+    });
 }
 
-/**
- * SIMPLIFIED AND ROBUST PAUSE: Uses prompt-sync and recreates EVERYTHING
- * to ensure the console is clean before any external I/O.
- */
-function pauseToContinueAndRecreate(message) {
-    // 1. Destroy the Blessed screen
-    if (screen) {
-        screen.destroy();
+// =====================
+// Actions (music, achievements, account creation...) (TRANSLATED TEXT)
+// =====================
+
+function tocamusic() {
+    if (!fs.existsSync(MUSIC_PATH) || !fs.existsSync(VLC_EXE)) {
+        // doesn't fail silently — warns
+        blessedPause("[SOUNDTRACK]\nAudio file or vlc.exe not found.");
+        return;
     }
-
-    // 2. Display the pause message
-    console.clear();
-    console.log("===========================================================================");
-    if (message) console.log(message);
-    console.log("[PRESS [ENTER] TO CONTINUE]");
-    console.log("===========================================================================");
-    prompt('');
-
-    // 3. Check window size again
-    while (process.stdout.columns < MIN_WIDTH || process.stdout.rows < MIN_HEIGHT) {
-        console.clear();
-        console.log("=========================================================");
-        console.log("             ⚠️ INSUFFICIENT SIZE ⚠️                   ");
-        console.log("=========================================================");
-        console.log(`The terminal is too small.`);
-        console.log(`Recommended: ${MIN_WIDTH}x${MIN_HEIGHT}.`);
-        console.log(`Current: ${process.stdout.columns}x${process.stdout.rows}.`);
-        console.log("=========================================================");
-        console.log("[Adjust the window and press **ENTER** to check again]");
-        prompt('');
-    }
-
-    // 4. Recreate the screen and restore the state
-    createBlessedScreen();
-    const menuState = menuItemsMap[currentMenu];
-
-    if (menuState) {
-        changeMenu(currentMenu, menuState.items, menuState.label);
-    } else {
-        changeMenu('main', mainMenuItems, 'MAIN MENU');
-    }
-}
-
-// ===============================================
-// 7. ACTION FUNCTIONS
-// ===============================================
-
-function playMusic() {
-    const command = `start /min "" ${VLC_COMMAND}`;
-    exec(`cmd.exe /c "${command}"`, (error, stdout, stderr) => {});
-}
-
-async function achievementsBlessed() {
-    let endings = [];
+    const cmd = `"${VLC_EXE}" --play-and-exit --qt-start-minimized "${MUSIC_PATH}"`;
     try {
-        endings = fs.readdirSync(ACH_FOLDER).filter(f => f.endsWith('.bin'));
+        // start minimized on windows
+        exec(`start /min "" ${cmd}`, (err) => {});
     } catch (e) {
-        updateContent('ACHIEVEMENTS', `[FILE ERROR]: Could not read achievements folder. ${e.message}`);
-        pauseToContinueAndRecreate("[ACHIEVEMENTS]");
+        console.error("Failed to start music:", e.message);
+    }
+}
+
+async function conquistasBlessed() {
+    let finais = [];
+    try {
+        finais = fs.readdirSync(ACH_FOLDER).filter(f => f.endsWith('.bin'));
+    } catch (e) {
+        updateContent('ACHIEVEMENTS', `[FILE ERROR]: Could not read the achievements folder. ${e.message}`);
+        if (menuList) menuList.focus();
         return;
     }
 
-    const count = endings.length;
-    let content = "CHECKING FOLDERS\n\n";
-
+    const count = finais.length;
+    let content = "\nCHECKING FOLDERS...\n\n";
     if (count > 0) {
-        content += "[FILES FOUND]\n" + endings.join('\n') +
-            "\n\n-> If you want to keep these endings, DO NOT RESTORE THEM";
+        content += `[${count} FILES FOUND]\n${finais.join('\n')}\n\n-> If you want to keep these endings, DO NOT RESTORE THEM.`;
     } else {
-        content += "-> No ending files found!";
+        content += "[NO ENDING FILES FOUND]";
     }
-
     updateContent('ACHIEVEMENTS', content);
-    pauseToContinueAndRecreate("[ACHIEVEMENTS]");
-}
-
-async function createAccountBlessed() {
-    if (screen) {
-        screen.destroy();
-    }
-    console.clear();
-    console.log("===========================================================================");
-    console.log("                     [ACCOUNT CREATION]                      ");
-    console.log("===========================================================================");
-
-    const Username = prompt("[USERNAME]: ");
-    const Password = prompt("[PASSWORD]: ");
-    console.log("===========================================================================");
-
-    const content = `[NAME]: ${Username}\r\n[PASSWORD]: ${Password}\r\n[LANGUAGE]: English \r\n`;
-
-    try {
-        fs.writeFileSync(ACCOUNT_FILE, content, 'utf8');
-        let endings = [];
-        try {
-            endings = fs.readdirSync(ACH_FOLDER).filter(f => f.endsWith('.bin'));
-        } catch (e) { /* Ignore */ }
-
-        if (endings.length > 0) {
-            fs.writeFileSync(ACH_SAVE_FILE, endings.join('\r\n'), 'utf8');
-            console.log("[SYSTEM]: Account created successfully! Your endings are saved.");
-        } else {
-            console.log("[SYSTEM]: Account created successfully! You don't have endings yet.");
-        }
-    } catch (error) {
-        console.error(`[CRITICAL ERROR]: Failed to create account or save file. ${error.message}`);
-    }
-
-
-    pauseToContinueAndRecreate();
-    updateContent('ACCOUNT CREATION', "[SYSTEM]: Account created and save file verified.");
+    if (menuList) menuList.focus();
 }
 
 /**
- * Handles the menu item selection.
+ * Account creation:
+ * - Destroys the TUI
+ * - Does I/O in the native console with prompt-sync
+ * - Recreates TUI and displays result with blessedPause
  */
+async function createAccountBlessedAndPause() {
+    // destroy TUI to avoid stdin conflicts
+    safeDestroyScreen();
+    console.clear();
+    console.log("===========================================================================");
+    console.log("              [ACCOUNT CREATION - CONSOLE INPUT]                           ");
+    console.log("===========================================================================");
+
+    try {
+        const usuario = prompt("[USERNAME]: ");
+        // prompt-sync has hide in some versions
+        const senha = prompt.hide ? prompt.hide("[PASSWORD]: ") : prompt("[PASSWORD]: "); 
+        console.log("===========================================================================");
+
+        // TRANSLATED: [IDIOMA]: Português -> [LANGUAGE]: English
+        const conteudo = `[NAME]: ${usuario}\r\n[PASSWORD]: ${senha}\r\n[LANGUAGE]: English\r\n`;
+
+        ensureDir(ACCOUNT_DIR);
+
+        let resultMessage = '';
+        try {
+            fs.writeFileSync(ACCOUNT_FILE, conteudo, 'utf8');
+
+            let finais = [];
+            try {
+                finais = fs.readdirSync(ACH_FOLDER).filter(f => f.endsWith('.bin'));
+            } catch (e) { /* ignore, not critical */ }
+
+            if (finais.length > 0) {
+                fs.writeFileSync(ACH_SAVE_FILE, finais.join('\r\n'), 'utf8');
+                resultMessage = "[SYSTEM]: Account created successfully! Your endings are saved.";
+            } else {
+                resultMessage = "[SYSTEM]: Account created successfully! You do not have any endings yet.";
+            }
+        } catch (errWrite) {
+            resultMessage = `[CRITICAL ERROR]: Failed to create account or save file. ${errWrite.message}`;
+        }
+
+        console.log(`\n[RESULT]: ${resultMessage}`);
+    } catch (errConsole) {
+        console.error("Error during console input:", errConsole.message);
+    }
+
+    prompt("Press ENTER to return to the menu...");
+
+    // recreate the TUI screen
+    createBlessedScreen();
+
+    // display pause and return to Settings
+    blessedPause("[SYSTEM]\nAccount processed successfully.", () => {
+        changeMenu('settings', settingsMenuItems, 'SETTINGS');
+    });
+}
+
+// =====================
+// Selection Handler (TRANSLATED TEXT)
+// =====================
 async function handleSelection(index) {
-    const selectedItem = menuList.getItem(index).getText().trim();
+    if (!menuList) return;
+    const itemObj = menuList.getItem(index);
+    if (!itemObj) return;
+    const selectedItem = (itemObj.getText ? itemObj.getText() : String(itemObj)).trim();
 
     try {
         if (currentMenu === 'main') {
             switch (selectedItem) {
                 case 'START GAME':
-                    if (tocando) exec('taskkill /IM vlc.exe /F');
-                    screen.destroy();
-                    // Assumes the English game file is 'mainEN.js'
-                    require('./mainEN.js'); 
+                    if (tocando) try { execSync('taskkill /IM vlc.exe /F'); } catch(e){}
+                    safeDestroyScreen();
+                    try {
+                        // Assuming mainEN.js exists for the game logic
+                        execSync(`node "${path.join(__dirname, 'mainEN.js')}"`, { stdio: 'inherit' });
+                    } catch (e) {
+                        console.error("Error starting game:", e.message);
+                    }
+                    process.exit(0);
                     break;
-                case 'RESET PROGRESS':
-                    exec('start cmd.exe /c node eraseData.js', async (error) => {
-                        const msg = error ? `[ERROR: FILE FAILED ${error.message}]` : '[PROGRESS RESET]';
-                        pauseToContinueAndRecreate(`[RESET PROGRESS]\n${msg}`);
+                case 'RESTART PROGRESS':
+                    exec('start cmd.exe /c node eraseData.js', (error) => {
+                        const msg = error ? `[ERROR: FILE FAILED ${error.message}]` : '[PROGRESS RESTARTED]';
+                        blessedPause(`[RESTART PROGRESS]\n${msg}`);
                     });
                     break;
                 case 'ACHIEVEMENTS':
-                    await achievementsBlessed();
+                    await conquistasBlessed();
                     break;
                 case 'SETTINGS':
                     changeMenu('settings', settingsMenuItems, 'SETTINGS');
@@ -464,7 +454,7 @@ async function handleSelection(index) {
                 case 'CREDITS':
                     updateContent('CREDITS',
                         "[OUR TEAM]\nProgramming:\nLucas Eduardo\n\nBeta Testers:\n\nScript:\nLucas Eduardo\n\nArt:\nLucas Eduardo\n\n" +
-                        "Music:\nRyan Creep (Youtube.com)\n\nSpecial thanks:\nSENAI Team\n\nTHANK YOU FOR PLAYING OUR GAME!");
+                        "Music:\nRyan Creep (Youtube.com)\n\nSpecial Thanks:\nSENAI Team\n\nTHANK YOU FOR PLAYING OUR GAME!");
                     break;
                 case 'SUPPORT':
                     changeMenu('support', supportMenuItems, 'SUPPORT THE GAME');
@@ -473,56 +463,60 @@ async function handleSelection(index) {
                         "You can also leave a review on the game page!\n\nDonation link: https://the-last-deploy.itch.io/pale-luna-2\n\n[OPEN?]");
                     break;
                 case 'EXIT':
-                    if (tocando) exec('taskkill /IM vlc.exe /F');
+                    if (tocando) try { execSync('taskkill /IM vlc.exe /F'); } catch(e){}
+                    safeDestroyScreen();
                     process.exit(0);
+                    break;
+                default:
+                    // default action
+                    break;
             }
         } else if (currentMenu === 'settings') {
             switch (selectedItem) {
-                case 'Soundtrack': changeMenu('music', musicOptionItems, 'SOUNDTRACK'); break;
+                case 'Soundtrack':
+                    changeMenu('music', musicOptionItems, 'SOUNDTRACK');
+                    break;
                 case 'Account Creation':
                     if (fs.existsSync(ACCOUNT_FILE)) {
                         changeMenu('overwrite', overwriteOptionItems, 'OVERWRITE ACCOUNT');
-                        updateContent('OVERWRITE ACCOUNT', "[A ACCOUNT FILE EXISTS, DO YOU WANT TO OVERWRITE IT?]");
+                        updateContent('OVERWRITE ACCOUNT', "[AN ACCOUNT FILE EXISTS, DO YOU WANT TO OVERWRITE IT?]");
                     } else {
-                        await createAccountBlessed();
-                        changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                        await createAccountBlessedAndPause();
                     }
                     break;
-                case 'Restore Endings': changeMenu('restore', restoreMenuItems, 'RESTORE ENDINGS'); break;
-                case 'Include Easter Eggs': changeMenu('easterEggs', easterEggsMenuItems, 'EASTER EGGS'); break;
-                case 'Language': changeMenu('language', languageMenuItems, 'LANGUAGE'); break; // NEW
-                case 'Back to main menu': changeMenu('main', mainMenuItems, 'MAIN MENU'); break;
+                case 'Restore Endings':
+                    changeMenu('restore', restoreMenuItems, 'RESTORE ENDINGS');
+                    break;
+                case 'Easter Eggs':
+                    changeMenu('easterEggs', easterEggsMenuItems, 'EASTER EGGS');
+                    break;
+                case 'Language':
+                    changeMenu('language', languageMenuItems, 'LANGUAGE');
+                    break;
+                case 'Back to main menu':
+                    changeMenu('main', mainMenuItems, 'MAIN MENU');
+                    break;
             }
-        } else if (currentMenu === 'language') { // NEW LANGUAGE HANDLER
+        } else if (currentMenu === 'language') {
             if (selectedItem === 'PT (BR)') {
-                
-                // 1. Limpa a música e destrói o TUI
-                if (tocando) exec('taskkill /IM vlc.exe /F');
-                screen.destroy(); 
-                
-                // 2. Comando usando 'call' para forçar a execução na mesma janela do terminal
-                // O 'call' é crucial no cmd.exe para trocar de script sem abrir nova janela.
-                const command = `call node "${BR_MENU_FILE}"`;
-                
+                // tries to switch to Portuguese menu, saving state
+                if (tocando) try { execSync('taskkill /IM vlc.exe /F'); } catch(e){}
+                safeDestroyScreen();
                 try {
-                    // *** PASSO CRÍTICO: execSync com stdio: 'inherit' ***
-                    // Garante que o comando seja enviado e o novo processo assuma o I/O
-                    execSync(command, { stdio: 'inherit' });
-                    
-                    // 3. Mata o processo Node atual imediatamente.
-                    process.exit(0); 
-                    
+                    execSync(`node "${BR_MENU_FILE}"`, { stdio: 'inherit' });
+                    process.exit(0);
                 } catch (error) {
-                    // Fallback em caso de erro crítico
-                    console.error(`[CRITICAL ERROR]: Language switch failed via execSync: ${error.message}`);
+                    console.error(`[CRITICAL ERROR]: Failed to start BR Menu: ${error.message}`);
                     createBlessedScreen();
                     changeMenu('language', languageMenuItems, 'LANGUAGE');
-                    pauseToContinueAndRecreate(`[LANGUAGE SWITCH FAILED]\nError: ${error.message}`);
+                    blessedPause(`[LANGUAGE SWAP FAILED]\nError: ${error.message}`, () => {
+                        changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                    });
                 }
             } else if (selectedItem === 'EN (US)') {
-                // Already in EN (US) - just give feedback
-                pauseToContinueAndRecreate("[SYSTEM]\nAlready in English (US).");
-                changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                blessedPause("[SYSTEM]\nAlready in English (US).", () => {
+                    changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                });
             } else if (selectedItem === 'Back') {
                 changeMenu('settings', settingsMenuItems, 'SETTINGS');
             }
@@ -531,13 +525,14 @@ async function handleSelection(index) {
             if (selectedItem.includes('Activate') || selectedItem.includes('Deactivate')) {
                 if (selectedItem.includes('Activate')) {
                     if (tocando) { message = "[MUSIC IS ALREADY PLAYING]"; }
-                    else { playMusic(); tocando = true; message = "[SOUNDTRACK STARTED]"; }
+                    else { tocamusic(); tocando = true; message = "[SOUNDTRACK STARTED]"; }
                 } else if (selectedItem.includes('Deactivate')) {
-                    if (tocando) { exec('taskkill /IM vlc.exe /F'); tocando = false; message = "[MUSIC STOPPED]"; }
+                    if (tocando) { try { execSync('taskkill /IM vlc.exe /F'); } catch(e){} tocando = false; message = "[MUSIC STOPPED]"; }
                     else { message = "[MUSIC IS ALREADY STOPPED]"; }
                 }
-                pauseToContinueAndRecreate(`[SOUNDTRACK]\n${message}`);
-                changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                blessedPause(`[SOUNDTRACK]\n${message}`, () => {
+                    changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                });
             } else if (selectedItem.includes('Back')) {
                 changeMenu('settings', settingsMenuItems, 'SETTINGS');
             }
@@ -545,100 +540,125 @@ async function handleSelection(index) {
             if (selectedItem === 'Create Account') {
                 if (fs.existsSync(ACCOUNT_FILE)) {
                     changeMenu('overwrite', overwriteOptionItems, 'OVERWRITE ACCOUNT');
-                    updateContent('OVERWRITE ACCOUNT', "[A ACCOUNT FILE EXISTS, DO YOU WANT TO OVERWRITE IT?]");
+                    updateContent('OVERWRITE ACCOUNT', "[AN ACCOUNT FILE EXISTS, DO YOU WANT TO OVERWRITE IT?]");
                 } else {
-                    await createAccountBlessed();
-                    changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                    await createAccountBlessedAndPause();
                 }
             } else if (selectedItem === 'Skip') {
-                pauseToContinueAndRecreate("[ACCOUNT CREATION SKIPPED]");
-                changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                blessedPause("[ACCOUNT CREATION SKIPPED]", () => {
+                    changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                });
             } else if (selectedItem === 'Back') {
                 changeMenu('settings', settingsMenuItems, 'SETTINGS');
             }
         } else if (currentMenu === 'overwrite') {
             if (selectedItem.includes('Yes')) {
-                await createAccountBlessed();
+                await createAccountBlessedAndPause();
             } else {
-                pauseToContinueAndRecreate("[ACCOUNT CREATION CANCELED]");
+                blessedPause("[ACCOUNT CREATION CANCELED]", () => {
+                    changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                });
             }
-            changeMenu('settings', settingsMenuItems, 'SETTINGS');
         } else if (currentMenu === 'easterEggs') {
             let message = '';
             if (selectedItem.includes('Activate') || selectedItem.includes('Deactivate')) {
                 if (selectedItem.includes('Activate')) {
                     if (fs.existsSync(ET_FILE)) { message = "[EASTER EGGS ARE ALREADY ACTIVATED]"; }
                     else { fs.writeFileSync(ET_FILE, 'Easter Eggs Activated', 'utf8'); message = "[EASTER EGGS ACTIVATED!]"; }
-                } else if (selectedItem.includes('Deactivate')) {
+                } else {
                     if (!fs.existsSync(ET_FILE)) { message = "[EASTER EGGS ARE ALREADY DEACTIVATED]"; }
                     else { fs.unlinkSync(ET_FILE); message = "[EASTER EGGS DEACTIVATED!]"; }
                 }
-                pauseToContinueAndRecreate(`[EASTER EGGS]\n${message}`);
-                changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                blessedPause(`[EASTER EGGS]\n${message}`, () => {
+                    changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                });
             } else if (selectedItem.includes('Back')) {
                 changeMenu('settings', settingsMenuItems, 'SETTINGS');
             }
         } else if (currentMenu === 'restore') {
             let message = '';
-            let endingsFolder = [];
-            try {
-                endingsFolder = fs.readdirSync(ACH_FOLDER).filter(f => f.endsWith('.bin'));
-            } catch (e) { /* Ignore */ }
-
+            let finaisPasta = [];
+            try { finaisPasta = fs.readdirSync(ACH_FOLDER).filter(f => f.endsWith('.bin')); } catch (e) { /* ignore */ }
 
             if (selectedItem.includes('Yes')) {
                 if (!fs.existsSync(ACH_SAVE_FILE)) {
                     message = "[SAVED ENDINGS FILE NOT FOUND]";
                 } else {
                     try {
-                        const data = fs.readFileSync(ACH_SAVE_FILE, 'utf8');
-                        let restored = [];
-                        const endingsToRestore = data.split('\n').map(f => f.trim()).filter(f => f.length > 0);
-
-                        if (endingsToRestore.length > 0) {
-                            endingsToRestore.forEach(ending => {
-                                if (!fs.existsSync(path.join(ACH_FOLDER, ending))) {
-                                    fs.writeFileSync(path.join(ACH_FOLDER, ending), 'a', 'utf8');
-                                    restored.push(ending);
-                                }
-                            });
-
-                            if (restored.length > 0) { message = `[ENDINGS RESTORED SUCCESSFULLY]:\n${restored.join('\n')}`; }
-                            else { message = "[ENDINGS WERE ALREADY PRESENT IN THE FOLDER]"; }
-                        } else { message = "[NO ENDINGS FOUND IN THE SAVE FILE]"; }
-                    } catch (err) { message = `[ERROR]: Failed to read or restore files: ${err.message}`; }
+                        const dados = fs.readFileSync(ACH_SAVE_FILE, 'utf8');
+                        const finaisToRestore = dados.split('\n').map(f => f.trim()).filter(f => f.length > 0);
+                        const restored = [];
+                        finaisToRestore.forEach(final => {
+                            const destino = path.join(ACH_FOLDER, final);
+                            if (!fs.existsSync(destino)) {
+                                fs.writeFileSync(destino, 'a', 'utf8');
+                                restored.push(final);
+                            }
+                        });
+                        if (restored.length > 0) { message = `[ENDINGS RESTORED SUCCESSFULLY]:\n${restored.join('\n')}`; }
+                        else { message = "[ENDINGS WERE ALREADY PRESENT IN THE FOLDER]"; }
+                    } catch (err) {
+                        message = `[ERROR]: Failed to read or restore files: ${err.message}`;
+                    }
                 }
-                pauseToContinueAndRecreate(`[RESTORE ENDINGS]\n${message}`);
-                changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                blessedPause(`[RESTORE ENDINGS]\n${message}`, () => {
+                    changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                });
             } else if (selectedItem.includes('No')) {
-                pauseToContinueAndRecreate("[RESTORATION CANCELED]");
-                changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                blessedPause("[RESTORATION CANCELED]", () => {
+                    changeMenu('settings', settingsMenuItems, 'SETTINGS');
+                });
             } else if (selectedItem.includes('Check')) {
-                if (endingsFolder.length > 0) {
-                    message = `[FILES FOUND IN CURRENT PROGRESS]:\n${endingsFolder.join('\n')}\n\n-> If you want to keep these endings, DO NOT RESTORE THEM`;
-                } else { message = "[NO ENDINGS FOUND!]"; }
-                pauseToContinueAndRecreate(`[ENDINGS CHECK]\n${message}`);
-                changeMenu('restore', restoreMenuItems, 'RESTORE ENDINGS');
+                if (finaisPasta.length > 0) {
+                    updateContent('ENDING VERIFICATION', `[FILES FOUND IN CURRENT PROGRESS]:\n${finaisPasta.join('\n')}\n\n-> If you want to keep these endings, DO NOT RESTORE THEM`);
+                } else {
+                    updateContent('ENDING VERIFICATION', "[NO ENDINGS FOUND!]");
+                }
+                if (menuList) menuList.focus();
             }
         } else if (currentMenu === 'support') {
             if (selectedItem.includes('Yes')) {
-                pauseToContinueAndRecreate("[OPENING LINK IN DEFAULT BROWSER...]");
-                exec('start https://the-last-deploy.itch.io/pale-luna-2');
+                blessedPause("[OPENING LINK IN DEFAULT BROWSER...]", () => {
+                    try { exec('start https://the-last-deploy.itch.io/pale-luna-2'); } catch (e) {}
+                    changeMenu('main', mainMenuItems, 'MAIN MENU');
+                });
             } else {
-                pauseToContinueAndRecreate("[OPTION DECLINED]");
+                blessedPause("[OPTION DECLINED]", () => {
+                    changeMenu('main', mainMenuItems, 'MAIN MENU');
+                });
             }
-            changeMenu('main', mainMenuItems, 'MAIN MENU');
         }
     } catch (error) {
-        console.error(`[CRITICAL MENU ERROR]: ${error.message}`);
-        pauseToContinueAndRecreate(`[CRITICAL ERROR]\nAn error occurred while processing the menu: ${error.message}`);
-        changeMenu('main', mainMenuItems, 'MAIN MENU');
+        blessedPause(`[CRITICAL ACTION ERROR]\nAn error occurred: ${error.message}`, () => {
+            changeMenu('main', mainMenuItems, 'MAIN MENU');
+        });
     }
 }
 
-// ===============================================
-// 8. PROGRAM INITIALIZATION
-// ===============================================
+// =====================
+// INITIALIZATION (TRANSLATED TEXT)
+// =====================
+function displayInitialResizeWarning() {
+    console.clear();
+    console.log("=========================================================");
+    console.log("             🚨 TERMINAL SIZE WARNING 🚨               ");
+    console.log("=========================================================");
+    console.log(`Resize the terminal to at least ${MIN_WIDTH}x${MIN_HEIGHT}.`);
+    console.log(`Press ENTER to check the current size and start.`);
+    prompt('');
+    while (process.stdout.columns < MIN_WIDTH || process.stdout.rows < MIN_HEIGHT) {
+        console.clear();
+        console.log("=========================================================");
+        console.log("             ⚠️ INSUFFICIENT SIZE ⚠️                   ");
+        console.log("=========================================================");
+        console.log(`Recommended: ${MIN_WIDTH}x${MIN_HEIGHT}. Current: ${process.stdout.columns}x${process.stdout.rows}.`);
+        console.log("[Adjust the window and press ENTER to check again]");
+        prompt('');
+    }
+    console.clear();
+    console.log("Size verified. Starting TUI...");
+}
+
 displayInitialResizeWarning();
 createBlessedScreen();
 changeMenu('main', mainMenuItems, 'MAIN MENU');
